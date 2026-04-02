@@ -12,16 +12,25 @@ export async function askAI(
   temperature = 0.7,
   userId = null,
   displayName = null,
+  userContext = null,
 ) {
   let userMessage = prompt;
+
+  // Enhanced context injection
   if (replyContext) {
     userMessage = `[Replying to: "${replyContext}"]\n${prompt}`;
   }
 
-  // store userId and displayName when available
+  // Add user history context if available
+  if (userContext) {
+    userMessage = `${userContext}\n${userMessage}`;
+  }
+
+  // Store with full metadata
   addMessage(guildId, channelId, 'user', userMessage, userId, displayName || username);
 
-  const messages = [{ role: 'system', content: SYSTEM_PROMPT }, ...getConversation(guildId, channelId)];
+  const conversationHistory = getConversation(guildId, channelId);
+  const messages = [{ role: 'system', content: SYSTEM_PROMPT }, ...conversationHistory];
 
   try {
     const { data } = await axios.post(
@@ -45,15 +54,16 @@ export async function askAI(
 
     let reply = data.choices?.[0]?.message?.content || 'No response.';
 
-    // Try to resolve plain display names in the AI reply into actual mention ids using recent conversation map.
+    // Enhanced mention resolution
     const mentionMap = getMentionMap(guildId, channelId);
     const allowedMentions = new Set();
 
-    // naive regex to capture tokens like "DisplayName:" or "DisplayName"
+    // More sophisticated name-to-mention replacement
     for (const nameKey of Object.keys(mentionMap)) {
-      const regex = new RegExp('\\b' + nameKey.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&') + '\\b', 'ig');
+      // Match whole words or names followed by punctuation
+      const regex = new RegExp('\\b' + nameKey.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&') + '\\b', 'gi');
+
       if (regex.test(reply)) {
-        // replace occurrences with a mention placeholder for now
         reply = reply.replace(regex, (match) => {
           const ids = mentionMap[match.toLowerCase()] || mentionMap[nameKey];
           if (ids && ids.length > 0) {
@@ -72,26 +82,33 @@ export async function askAI(
       );
     }
 
-    addMessage(guildId, channelId, 'assistant', reply, null, 'Assistant');
+    // Store bot's own response with metadata
+    addMessage(guildId, channelId, 'assistant', reply, null, 'TARS');
+
     return { reply, allowedMentions: Array.from(allowedMentions) };
   } catch (err) {
     console.error('OpenRouter API error:', err.response?.data || err.message);
 
     if (err.response?.status === 429) {
-      throw new Error('Rate limit hit. Try again in a moment.');
+      throw new Error('Rate limit exceeded. Give it a moment.');
     }
+
     if (err.response?.status === 401) {
-      throw new Error('API authentication failed. Check your API key.');
+      throw new Error('API authentication failed. Check your API key configuration.');
     }
+
     if (err.response?.status === 400) {
-      throw new Error('Invalid request. Your prompt might be too long or contain invalid characters.');
+      throw new Error('Invalid request. Your prompt might contain problematic content.');
     }
+
     if (err.response?.status === 503) {
-      throw new Error('AI service is temporarily unavailable. Try again in a minute.');
+      throw new Error('AI service unavailable. Try again in a minute.');
     }
+
     if (err.code === 'ECONNABORTED') {
-      throw new Error('Request timed out. The AI took too long to respond.');
+      throw new Error('Request timed out. The AI is taking too long to respond.');
     }
-    throw new Error('Failed to fetch AI response. Try again later.');
+
+    throw new Error('Failed to get AI response. Try again later.');
   }
 }

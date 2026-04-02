@@ -2,6 +2,7 @@ import { askAI } from '../../../utils/ai/openrouter.js';
 import { checkCooldown } from '../../../utils/ai/cooldown.js';
 import { safeReply } from '../../../utils/ai/safeReply.js';
 import { MAX_PROMPT_LENGTH } from '../../../utils/ai/constants.js';
+import { getUserProfile } from '../../../utils/ai/memory.js';
 import { MessageType } from 'discord.js';
 
 /**
@@ -33,40 +34,66 @@ const handler = async (message) => {
   if (!isMentioned && !isReplyToBot) return;
 
   if (checkCooldown(userId)) {
-    return message.reply('⏳ Slow down, chief. Wait a few seconds before asking again.');
+    return message.reply('â³ Slow down there. Give me a few seconds to catch up.');
   }
 
   let prompt = message.content.replace(`<@${botId}>`, '').trim();
 
-  if (!prompt && repliedMessage) {
-    prompt = repliedMessage.content;
+  // Enhanced reply context handling
+  let replyContext = null;
+  if (repliedMessage) {
+    const repliedAuthor = repliedMessage.member?.displayName || repliedMessage.author.username;
+    const repliedUserId = repliedMessage.author.id;
+    const repliedContent = repliedMessage.content || '[Image/Embed/Attachment]';
+
+    // Include who sent the message being replied to
+    replyContext = `${repliedAuthor} (ID: ${repliedUserId}): ${repliedContent}`;
+
+    // If prompt is empty and they're replying to something, assume they want analysis
+    if (!prompt) {
+      prompt = 'What about this message?';
+    }
   }
 
   if (!prompt) return;
 
   if (prompt.length > MAX_PROMPT_LENGTH) {
     return message.reply(
-      `⚠️ Your prompt is too long (${prompt.length} chars). Keep it under ${MAX_PROMPT_LENGTH} characters.`,
+      `âš ï¸ That's ${prompt.length} characters. I can handle up to ${MAX_PROMPT_LENGTH}. Try being more concise.`,
     );
   }
 
-  let replyContext = null;
-  if (repliedMessage) {
-    const repliedAuthor = repliedMessage.member?.displayName || repliedMessage.author.username;
-    const repliedContent = repliedMessage.content || '[Image/Embed]';
-    replyContext = `${repliedAuthor}: ${repliedContent}`;
+  // Get user's history for context
+  const userProfile = getUserProfile(userId);
+  let userContext = null;
+  if (userProfile && userProfile.messages.length > 0) {
+    const recentCount = Math.min(3, userProfile.messages.length);
+    userContext = `[User history: ${userProfile.displayName} has sent ${userProfile.messages.length} messages. Recent topics: ${userProfile.messages
+      .slice(-recentCount)
+      .map((m) => m.content.substring(0, 50))
+      .join('; ')}]`;
   }
 
   await message.channel.sendTyping();
 
   try {
-    const result = await askAI(guildId, channelId, username, prompt, replyContext, 0.7, userId, displayName);
+    const result = await askAI(
+      guildId,
+      channelId,
+      username,
+      prompt,
+      replyContext,
+      0.7,
+      userId,
+      displayName,
+      userContext,
+    );
 
     const { reply, allowedMentions = [] } =
       typeof result === 'string' ? { reply: result, allowedMentions: [] } : result || {};
 
     if (!reply || typeof reply !== 'string' || reply.trim() === '') {
-      return message.reply('⚠️ (AI returned an empty message)');
+      return message.reply('âš ï¸ Hmm. I got nothing. Try asking differently.');
     }
 
     let isFirstChunk = true;
@@ -84,8 +111,8 @@ const handler = async (message) => {
     );
   } catch (err) {
     console.error('AI messageCreate error:', err);
-    const errorMsg = err.message || 'Something went wrong while talking to the AI.';
-    await message.reply(`⚠️ ${errorMsg}`);
+    const errorMsg = err.message || 'Something went sideways with the AI.';
+    await message.reply(`âš ï¸ ${errorMsg}`);
   }
 };
 

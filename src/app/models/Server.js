@@ -81,6 +81,36 @@ const serverSchema = new Schema({
         default: '<@&{role}>, time to bump the server! Use /bump',
       },
     },
+    music: {
+      status: { type: Boolean, default: true },
+
+      volume: {
+        type: Number,
+        default: 50,
+        min: 0,
+        max: 100,
+      },
+
+      djRole: {
+        type: String,
+        default: '',
+      },
+
+      autoLeave: {
+        type: Boolean,
+        default: true,
+      },
+
+      stay24x7: {
+        type: Boolean,
+        default: false,
+      },
+
+      announceNowPlaying: {
+        type: Boolean,
+        default: true,
+      },
+    },
   },
 });
 
