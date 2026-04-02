@@ -22,4 +22,4 @@ jobs:
       - name: Deploy
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_IP }} \
-            "cd /home/nnh291/madman-v1 && git pull origin main && npm ci && pm2 restart all"
+            "cd /home/nnh291/madman-v1 && git pull origin main && npm ci && pm2 restart mad"
