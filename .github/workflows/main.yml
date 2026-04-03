@@ -21,5 +21,9 @@ jobs:
 
       - name: Deploy
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_IP }} \
-            "cd /home/nnh291/madman-v1 && git pull origin main && npm ci && npm run build && pm2 restart mad"
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_IP }} '
+            cd /home/${{ secrets.VM_USER }}/madman-v1/
+            git pull origin main
+            npm ci
+            sudo systemctl restart mad
+          '
