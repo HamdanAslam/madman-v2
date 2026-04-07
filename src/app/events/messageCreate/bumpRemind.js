@@ -5,6 +5,91 @@ import { getGuildDoc } from '../../cache/guildCache.js';
 const DISBOARD_ID = '302050872383242240';
 const activeTimers = new Map(); // guildId -> timeout
 
+export async function clearPendingReminder(guildId) {
+  if (activeTimers.has(guildId)) {
+    clearTimeout(activeTimers.get(guildId));
+    activeTimers.delete(guildId);
+  }
+
+  await Server.findOneAndUpdate(
+    { guildId },
+    {
+      $set: {
+        'modules.bumpReminders.nextReminderAt': null,
+        'modules.bumpReminders.reminderChannelId': '',
+      },
+    },
+    { upsert: true },
+  );
+}
+
+async function sendReminder(client, guildId, channelId) {
+  try {
+    const guild = client.guilds.cache.get(guildId) || (await client.guilds.fetch(guildId).catch(() => null));
+    if (!guild) {
+      throw new Error('Guild not found');
+    }
+
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!channel || !channel.isTextBased?.()) {
+      throw new Error('Reminder channel unavailable');
+    }
+
+    const serverDoc = await getGuildDoc(guildId);
+    const bumpConfig = serverDoc?.modules?.bumpReminders;
+    if (!bumpConfig?.status || !bumpConfig.roleId) {
+      throw new Error('Bump reminders disabled or not configured');
+    }
+
+    let reminderMsg = bumpConfig.reminderMessage || '<@&{role}>, time to bump the server! Use /bump';
+    reminderMsg = reminderMsg.replace(/\{role\}/g, bumpConfig.roleId);
+    await channel.send(reminderMsg);
+  } catch (e) {
+    Logger.error('Failed to send bump reminder', e);
+  } finally {
+    await clearPendingReminder(guildId);
+  }
+}
+
+function scheduleReminder(client, guildId, channelId, delayMs) {
+  if (activeTimers.has(guildId)) {
+    clearTimeout(activeTimers.get(guildId));
+  }
+
+  const timeout = setTimeout(async () => {
+    activeTimers.delete(guildId);
+    await sendReminder(client, guildId, channelId);
+  }, delayMs);
+
+  activeTimers.set(guildId, timeout);
+}
+
+export async function loadPendingBumpReminders(client) {
+  const pending = await Server.find(
+    {
+      'modules.bumpReminders.nextReminderAt': { $ne: null },
+      'modules.bumpReminders.status': true,
+      'modules.bumpReminders.roleId': { $ne: '' },
+    },
+    {
+      guildId: 1,
+      'modules.bumpReminders.nextReminderAt': 1,
+      'modules.bumpReminders.reminderChannelId': 1,
+    },
+  ).lean();
+
+  for (const doc of pending) {
+    const nextReminderAt = doc.modules.bumpReminders.nextReminderAt;
+    const channelId = doc.modules.bumpReminders.reminderChannelId;
+    if (!nextReminderAt || !channelId) {
+      continue;
+    }
+
+    const delayMs = Math.max(0, new Date(nextReminderAt).getTime() - Date.now());
+    scheduleReminder(client, doc.guildId, channelId, delayMs);
+  }
+}
+
 /**
  * @type {import('commandkit').EventHandler<'messageCreate'>}
  */
@@ -14,20 +99,15 @@ const handler = async (message) => {
   if (!message.interaction) return;
 
   try {
-    // Check if it's a bump success message
     const embed = message.embeds[0];
     if (!embed?.description?.includes('Bump done!')) return;
 
     const guildId = message.guildId;
     const serverDoc = await getGuildDoc(guildId);
-
     const bumpConfig = serverDoc?.modules?.bumpReminders;
-    if (!bumpConfig?.status) return;
-    if (!bumpConfig.roleId) return;
+    if (!bumpConfig?.status || !bumpConfig.roleId) return;
 
     const channel = message.channel;
-
-    // Send confirmation message
     const confirmationMsg = bumpConfig.confirmationMessage || 'Thanks for bumping! I will remind you in 2 hours.';
     try {
       await channel.send(confirmationMsg);
@@ -35,27 +115,21 @@ const handler = async (message) => {
       Logger.error('Failed to send bump confirmation', e);
     }
 
-    // Clear any existing timer for this guild
-    if (activeTimers.has(guildId)) {
-      clearTimeout(activeTimers.get(guildId));
-    }
+    await clearPendingReminder(guildId);
 
-    // Set 2-hour timer
-    const timeout = setTimeout(async () => {
-      try {
-        // Replace {role} placeholder
-        let reminderMsg = bumpConfig.reminderMessage || '<@&{role}>, time to bump the server! Use /bump';
-        reminderMsg = reminderMsg.replace(/\{role\}/g, bumpConfig.roleId);
+    const nextReminderAt = new Date(Date.now() + 7200000);
+    await Server.findOneAndUpdate(
+      { guildId },
+      {
+        $set: {
+          'modules.bumpReminders.nextReminderAt': nextReminderAt,
+          'modules.bumpReminders.reminderChannelId': channel.id,
+        },
+      },
+      { upsert: true },
+    );
 
-        await channel.send(reminderMsg);
-        activeTimers.delete(guildId);
-      } catch (e) {
-        Logger.error('Failed to send bump reminder', e);
-        activeTimers.delete(guildId);
-      }
-    }, 7200000); // 2 hours in milliseconds
-
-    activeTimers.set(guildId, timeout);
+    scheduleReminder(message.client, guildId, channel.id, 7200000);
   } catch (err) {
     Logger.error('messageCreate/bump-reminder error', err);
   }

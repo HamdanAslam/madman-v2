@@ -2,6 +2,7 @@ import { commandkit } from 'commandkit';
 import { ApplicationCommandOptionType, PermissionFlagsBits, EmbedBuilder, Colors } from 'discord.js';
 import Server from '../../models/Server.js';
 import { getGuildPrefix, getGuildDoc } from '../../cache/guildCache.js';
+import { clearPendingReminder } from '../../events/messageCreate/bumpRemind.js';
 import { revalidateTag } from '@commandkit/cache';
 
 commandkit.setPrefixResolver(async (message) => {
@@ -109,6 +110,10 @@ export const chatInput = async (ctx) => {
     await Server.findOneAndUpdate({ guildId }, { $set: { 'modules.bumpReminders.status': enabled } }, { upsert: true });
     revalidateTag(`server:${guildId}`);
 
+    if (!enabled) {
+      await clearPendingReminder(guildId);
+    }
+
     return interaction.editReply({
       embeds: [
         new EmbedBuilder()
@@ -176,6 +181,7 @@ export const chatInput = async (ctx) => {
     const role = roleId ? `<@&${roleId}>` : 'Not set';
     const confirmation = config?.confirmationMessage || 'Thanks for bumping! I will remind you in 2 hours.';
     const reminder = config?.reminderMessage || '<@&{role}>, time to bump the server! Use /bump';
+    const nextReminderAt = config?.nextReminderAt ? new Date(config.nextReminderAt).toLocaleString() : 'Not scheduled';
 
     return interaction.editReply({
       embeds: [
@@ -185,6 +191,7 @@ export const chatInput = async (ctx) => {
           .addFields(
             { name: 'Status', value: status, inline: true },
             { name: 'Role', value: role, inline: true },
+            { name: 'Next Reminder', value: nextReminderAt, inline: false },
             { name: 'Confirmation Message', value: `\`\`\`${confirmation}\`\`\``, inline: false },
             { name: 'Reminder Message', value: `\`\`\`${reminder}\`\`\``, inline: false },
           )

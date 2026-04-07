@@ -1,5 +1,6 @@
 import { commandkit } from 'commandkit';
 import { getGuildPrefix, getGuildDoc } from '../../cache/guildCache.js';
+import { addMessage } from '../../utils/ai/memory.js';
 import { ApplicationCommandOptionType, MessageFlags, EmbedBuilder, Colors } from 'discord.js';
 import Server from '../../models/Server.js'; // make sure this path is correct
 const cooldown = new Map();
@@ -37,14 +38,30 @@ export const chatInput = async (ctx) => {
 
   let sentMessage;
   try {
+    let replyToDisplayName = null;
+    let replyToUserId = null;
+
     if (messageId) {
       const targetMessage = await interaction.channel.messages.fetch(messageId);
+      replyToDisplayName = targetMessage.member?.displayName || targetMessage.author.username;
+      replyToUserId = targetMessage.author.id;
       sentMessage = await targetMessage.reply(content);
       await interaction.editReply({ content: '✅ Replied to message.' });
     } else {
       sentMessage = await interaction.channel.send(content);
       await interaction.editReply({ content: '✅ Message sent to channel.' });
     }
+
+    addMessage(
+      interaction.guildId,
+      interaction.channelId,
+      'assistant',
+      content,
+      null,
+      'madman',
+      replyToDisplayName,
+      replyToUserId,
+    );
 
     await logCommand(client, interaction, content, sentMessage, true);
   } catch (err) {

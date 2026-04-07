@@ -41,17 +41,19 @@ const handler = async (message) => {
 
   // Enhanced reply context handling
   let replyContext = null;
+  let replyToDisplayName = null;
+  let replyToUserId = null;
+
   if (repliedMessage) {
-    const repliedAuthor = repliedMessage.member?.displayName || repliedMessage.author.username;
-    const repliedUserId = repliedMessage.author.id;
+    replyToDisplayName = repliedMessage.member?.displayName || repliedMessage.author.username;
+    replyToUserId = repliedMessage.author.id;
     const repliedContent = repliedMessage.content || '[Image/Embed/Attachment]';
 
     // Include who sent the message being replied to
-    replyContext = `${repliedAuthor} (ID: ${repliedUserId}): ${repliedContent}`;
+    replyContext = `${replyToDisplayName} (ID: ${replyToUserId}): ${repliedContent}`;
 
-    // If prompt is empty and they're replying to something, assume they want analysis
     if (!prompt) {
-      prompt = 'What about this message?';
+      prompt = 'Please explain or respond to that message.';
     }
   }
 
@@ -86,6 +88,8 @@ const handler = async (message) => {
       0.7,
       userId,
       displayName,
+      replyToDisplayName,
+      replyToUserId,
       userContext,
     );
 

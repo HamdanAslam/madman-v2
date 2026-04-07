@@ -80,6 +80,8 @@ const serverSchema = new Schema({
         type: String,
         default: '<@&{role}>, time to bump the server! Use /bump',
       },
+      nextReminderAt: { type: Date, default: null },
+      reminderChannelId: { type: String, default: '' },
     },
     music: {
       status: { type: Boolean, default: true },

@@ -12,25 +12,27 @@ export async function askAI(
   temperature = 0.7,
   userId = null,
   displayName = null,
+  replyToDisplayName = null,
+  replyToUserId = null,
   userContext = null,
 ) {
-  let userMessage = prompt;
-
-  // Enhanced context injection
-  if (replyContext) {
-    userMessage = `[Replying to: "${replyContext}"]\n${prompt}`;
-  }
-
-  // Add user history context if available
-  if (userContext) {
-    userMessage = `${userContext}\n${userMessage}`;
-  }
-
-  // Store with full metadata
-  addMessage(guildId, channelId, 'user', userMessage, userId, displayName || username);
+  const author = displayName || username || 'User';
+  const baseUserMessage = `${author}${replyToDisplayName ? ` (replying to ${replyToDisplayName})` : ''}: ${prompt}`;
+  const requestMessage = replyContext
+    ? `[Replying to: ${replyContext}]\n${baseUserMessage}`
+    : baseUserMessage;
 
   const conversationHistory = getConversation(guildId, channelId);
-  const messages = [{ role: 'system', content: SYSTEM_PROMPT }, ...conversationHistory];
+  const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
+
+  if (userContext) {
+    messages.push({
+      role: 'system',
+      content: `Conversation memory note: ${userContext}`,
+    });
+  }
+
+  messages.push(...conversationHistory, { role: 'user', content: requestMessage });
 
   try {
     const { data } = await axios.post(
@@ -53,15 +55,11 @@ export async function askAI(
     );
 
     let reply = data.choices?.[0]?.message?.content || 'No response.';
-
-    // Enhanced mention resolution
     const mentionMap = getMentionMap(guildId, channelId);
     const allowedMentions = new Set();
 
-    // More sophisticated name-to-mention replacement
     for (const nameKey of Object.keys(mentionMap)) {
-      // Match whole words or names followed by punctuation
-      const regex = new RegExp('\\b' + nameKey.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&') + '\\b', 'gi');
+      const regex = new RegExp('\\b' + nameKey.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '\\b', 'gi');
 
       if (regex.test(reply)) {
         reply = reply.replace(regex, (match) => {
@@ -82,8 +80,8 @@ export async function askAI(
       );
     }
 
-    // Store bot's own response with metadata
-    addMessage(guildId, channelId, 'assistant', reply, null, 'TARS');
+    addMessage(guildId, channelId, 'user', prompt, userId, author, replyToDisplayName, replyToUserId);
+    addMessage(guildId, channelId, 'assistant', reply, null, 'madman');
 
     return { reply, allowedMentions: Array.from(allowedMentions) };
   } catch (err) {

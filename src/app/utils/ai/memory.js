@@ -49,7 +49,16 @@ function updateUserProfile(userId, displayName, message) {
   }
 }
 
-export function addMessage(guildId, channelId, role, content, userId = null, displayName = 'User') {
+export function addMessage(
+  guildId,
+  channelId,
+  role,
+  content,
+  userId = null,
+  displayName = 'User',
+  replyToDisplayName = null,
+  replyToUserId = null,
+) {
   const key = getConvoKey(guildId, channelId);
 
   if (!conversations.has(key)) {
@@ -67,6 +76,8 @@ export function addMessage(guildId, channelId, role, content, userId = null, dis
     content,
     userId,
     displayName,
+    replyToDisplayName,
+    replyToUserId,
     timestamp: Date.now(),
   });
 
@@ -116,18 +127,19 @@ export function getConversation(guildId, channelId) {
   // Format messages for the API with clear user identification
   return convo.messages.map((msg) => {
     if (msg.role === 'user') {
-      const name = msg.displayName || (msg.userId ? `user:${msg.userId}` : 'User');
+      const speaker = msg.displayName || (msg.userId ? `user:${msg.userId}` : 'User');
+      const replyNote = msg.replyToDisplayName ? ` (replying to ${msg.replyToDisplayName})` : '';
       return {
         role: 'user',
-        content: `${name}: ${msg.content}`,
-      };
-    } else {
-      // Assistant messages (bot's own responses)
-      return {
-        role: 'assistant',
-        content: msg.content,
+        content: `${speaker}${replyNote}: ${msg.content}`,
       };
     }
+
+    const assistantName = msg.displayName || 'madman';
+    return {
+      role: 'assistant',
+      content: `${assistantName}: ${msg.content}`,
+    };
   });
 }
 

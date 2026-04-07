@@ -1,6 +1,7 @@
 import { Logger } from 'commandkit/logger';
 import mongoose from 'mongoose';
 import { loadAFKCache } from '../../cache/afkCache.js';
+import { loadPendingBumpReminders } from '../messageCreate/bumpRemind.js';
 
 /**
  * @type {import('commandkit').EventHandler<'clientReady'>}
@@ -14,6 +15,7 @@ const handler = async (client) => {
     Logger.error('Database connection failed', err);
   }
   await loadAFKCache();
+  await loadPendingBumpReminders(client);
 };
 
 export default handler;
