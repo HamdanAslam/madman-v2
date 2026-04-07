@@ -53,7 +53,7 @@ export const chatInput = async (ctx) => {
   if (targetMember.permissions.has(PermissionsBitField.Flags.Administrator)) {
     return ctx.interaction.editReply('Members with Administrator cannot be kicked.');
   }
-  if (executor.id !== guild.ownerId && targetMember.roles.highest.position >= executorMember.roles.highest.position) {
+  if (executor.id !== process.env.OWNER_ID && executor.id !== guild.ownerId && targetMember.roles.highest.position >= executorMember.roles.highest.position) {
     return ctx.interaction.editReply("You can't kick this user because they have the same or higher role than you.");
   }
   if (!targetMember.kickable) {
@@ -117,6 +117,7 @@ export const message = async (ctx) => {
     return ctx.message.reply('Members with Administrator cannot be kicked.');
   }
   if (
+    executorMember.id !== process.env.OWNER_ID &&
     executorMember.id !== guild.ownerId &&
     targetMember.roles.highest.position >= executorMember.roles.highest.position
   ) {

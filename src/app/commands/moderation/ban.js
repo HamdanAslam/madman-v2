@@ -54,6 +54,7 @@ export const chatInput = async (ctx) => {
     return ctx.interaction.editReply('Members with Administrator cannot be banned.');
   }
   if (
+    executor.id !== process.env.OWNER_ID &&
     executor.id !== guild.ownerId &&
     targetMember &&
     targetMember.roles.highest.position >= executorMember.roles.highest.position
@@ -118,9 +119,9 @@ export const message = async (ctx) => {
   if (target.id === guild.ownerId) return ctx.message.reply('You cannot ban the server owner.');
   if (targetMember?.permissions.has(PermissionsBitField.Flags.Administrator)) {
     return ctx.message.reply('Members with Administrator cannot be banned.');
-    d;
   }
   if (
+    executorMember.id !== process.env.OWNER_ID &&
     executorMember.id !== guild.ownerId &&
     targetMember &&
     targetMember.roles.highest.position >= executorMember.roles.highest.position
