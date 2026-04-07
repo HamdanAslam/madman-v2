@@ -25,5 +25,6 @@ jobs:
             cd /home/${{ secrets.VM_USER }}/madman-v1/
             git pull origin main
             npm ci
+            npm run build
             sudo systemctl restart mad
           '
