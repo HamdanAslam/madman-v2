@@ -7,6 +7,12 @@ commandkit.setPrefixResolver(async (message) => {
   return await getGuildPrefix(message.guildId);
 });
 
+/** @type {import('commandkit').CommandData} */
+export const command = {
+  name: 'banish',
+  description: 'Mock ban',
+};
+
 /** @param {import('commandkit').MessageCommandContext} ctx */
 export const message = async (ctx) => {
   const args = ctx.args();
