@@ -55,22 +55,40 @@ export async function askAI(
     );
 
     let reply = data.choices?.[0]?.message?.content || 'No response.';
+    reply = reply.trim().replace(/^(?:madman|assistant|bot|AI):\s*/i, '');
     const mentionMap = getMentionMap(guildId, channelId);
     const allowedMentions = new Set();
 
-    for (const nameKey of Object.keys(mentionMap)) {
-      const regex = new RegExp('\\b' + nameKey.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '\\b', 'gi');
+    const mentionKeys = Object.keys(mentionMap).sort((a, b) => b.length - a.length);
+    for (const nameKey of mentionKeys) {
+      const ids = mentionMap[nameKey];
+      if (!ids || ids.length === 0) continue;
+      const targetId = ids[0];
+      const escapedName = nameKey.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
 
-      if (regex.test(reply)) {
-        reply = reply.replace(regex, (match) => {
-          const ids = mentionMap[match.toLowerCase()] || mentionMap[nameKey];
-          if (ids && ids.length > 0) {
-            allowedMentions.add(ids[0]);
-            return `<@${ids[0]}>`;
-          }
+      const replacement = `<@${targetId}>`;
+
+      // Replace explicit invalid mention tokens like <@DisplayName> or <@@DisplayName>
+      reply = reply.replace(new RegExp(`<@+${escapedName}>`, 'gi'), () => {
+        allowedMentions.add(targetId);
+        return replacement;
+      });
+
+      // Replace @DisplayName or @DisplayNameNoSpaces
+      reply = reply.replace(new RegExp(`@${escapedName}`, 'gi'), () => {
+        allowedMentions.add(targetId);
+        return replacement;
+      });
+
+      // Replace plain mentions if model uses the username alone
+      reply = reply.replace(new RegExp(`\\b${escapedName}\\b`, 'gi'), (match) => {
+        // Avoid accidentally replacing numeric IDs or already-correct mentions
+        if (/^<@\d+>$/.test(match) || /^<@&\d+>$/.test(match)) {
           return match;
-        });
-      }
+        }
+        allowedMentions.add(targetId);
+        return replacement;
+      });
     }
 
     if (data.usage) {

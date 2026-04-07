@@ -128,17 +128,19 @@ export function getConversation(guildId, channelId) {
   return convo.messages.map((msg) => {
     if (msg.role === 'user') {
       const speaker = msg.displayName || (msg.userId ? `user:${msg.userId}` : 'User');
-      const replyNote = msg.replyToDisplayName ? ` (replying to ${msg.replyToDisplayName})` : '';
+      const mention = msg.userId ? ` <@${msg.userId}>` : '';
+      const replyNote = msg.replyToDisplayName
+        ? ` (replying to ${msg.replyToDisplayName}${msg.replyToUserId ? ` <@${msg.replyToUserId}>` : ''})`
+        : '';
       return {
         role: 'user',
-        content: `${speaker}${replyNote}: ${msg.content}`,
+        content: `${speaker}${mention}${replyNote}: ${msg.content}`,
       };
     }
 
-    const assistantName = msg.displayName || 'madman';
     return {
       role: 'assistant',
-      content: `${assistantName}: ${msg.content}`,
+      content: msg.content,
     };
   });
 }
@@ -160,11 +162,15 @@ export function getMentionMap(guildId, channelId) {
     if (!msg.userId) continue;
 
     const names = new Set();
-    if (msg.displayName) names.add(msg.displayName);
+    if (msg.displayName) {
+      names.add(msg.displayName);
+      names.add(`@${msg.displayName}`);
+    }
 
-    // Handle display names with spaces
+    // Handle display names with spaces and compact variants
     if (msg.displayName && msg.displayName.includes(' ')) {
       names.add(msg.displayName.replace(/\s+/g, ''));
+      names.add(`@${msg.displayName.replace(/\s+/g, '')}`);
     }
 
     for (const n of names) {
